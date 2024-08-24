@@ -78,9 +78,44 @@ def update_location(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def create_group(request):
     serializer = CreateGroupSerializer(data=request.data)
     if serializer.is_valid():
         group = serializer.save()
+        create_meeting()
         return Response({"group_id": group.id, "name": group.name}, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+@api_view(['POST','GET'])
+@permission_classes([IsAuthenticated])
+def create_meeting(request):
+    serializer = CreateMeetingSerializer(data=request.data)
+    if serializer.is_valid():
+        meeting = serializer.save()
+        return Response({
+            "meeting_id": meeting.id,
+            "name": meeting.name,
+            "finalized_location": meeting.finalized_location,
+            "finalized_latitude": meeting.finalized_latitude,
+            "finalized_longitude": meeting.finalized_longitude,
+            "created_at": meeting.created_at
+        }, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def user_meetings(request):
+    user = request.user
+    
+    # Get all the groups the user is a member of
+    user_groups = user.member_of_groups.all()
+    
+    # Retrieve all meetings associated with these groups
+    meetings = Meeting.objects.filter(group__in=user_groups)
+    
+    # Serialize the meeting data
+    serializer = MeetingSerializer(meetings, many=True)
+    
+    return Response(serializer.data, status=status.HTTP_200_OK)

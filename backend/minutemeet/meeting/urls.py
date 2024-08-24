@@ -8,6 +8,8 @@ urlpatterns = [
     path('home/', home_view, name='home'),
     path('update-location/', update_location, name='update_location'),
     path('create-group/', create_group, name='create_group'),
+    path('create-meeting/', create_meeting,name='create_meeting'),
+    path('user/meetings', user_meetings, name='user_meetings')
 
 ]
 

@@ -75,3 +75,48 @@ class CreateGroupSerializer(serializers.Serializer):
         group.save()
         
         return group
+class CreateMeetingSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=255)
+    user_phones = serializers.ListField(
+        child=serializers.CharField(max_length=20),
+        max_length=4,
+        min_length=1
+    )
+
+    def validate_user_phones(self, value):
+        if len(value) > 4:
+            raise serializers.ValidationError("A group can have a maximum of 4 members.")
+        return value
+
+    def create(self, validated_data):
+        group = Group.objects.get(name=validated_data['name'])
+        print(group)
+        name = validated_data['name']
+        user_phones = validated_data['user_phones']
+        print(user_phones)
+        print(name)
+
+        users = User.objects.filter(phone__in=user_phones)
+        print(users)
+        
+        if users.count() != len(user_phones):
+            print(users.count(), len(user_phones))
+            raise serializers.ValidationError("One or more phone numbers are invalid or users not in group.")
+
+        # Calculate the optimal location
+        avg_latitude = sum(user.latitude for user in users) / len(users)
+        avg_longitude = sum(user.longitude for user in users) / len(users)
+
+        meeting = Meeting.objects.create(
+            group=group,
+            name=name,
+            finalized_latitude=avg_latitude,
+            finalized_longitude=avg_longitude
+        )
+
+        return meeting
+    
+class MeetingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Meeting
+        fields = ['id', 'name', 'date', 'finalized_location', 'finalized_latitude', 'finalized_longitude', 'created_at']

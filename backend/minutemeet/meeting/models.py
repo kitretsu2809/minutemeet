@@ -3,6 +3,8 @@ from django.db import models
 from django.utils.crypto import get_random_string
 import random
 import string
+#models.py
+
 class User(AbstractUser):
     phone = models.CharField(max_length=20, null=True, blank=True)
     email = models.EmailField(unique=True)
@@ -28,12 +30,6 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
-
-# models.py
-from django.db import models
-from django.contrib.auth import get_user_model
-
-User = get_user_model()
 
 class Group(models.Model):
     name = models.CharField(max_length=255)
