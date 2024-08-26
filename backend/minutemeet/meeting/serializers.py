@@ -1,5 +1,66 @@
 from rest_framework import serializers
 from .models import User, Group, Meeting
+import googlemaps
+from itertools import combinations
+
+# Initialize Google Maps client
+gmaps = googlemaps.Client(key='AIzaSyC9OK4cKIweM7ph1Tnm3yWpfWGibDFstcg')
+def get_place(lat,long):
+    result = gmaps.reverse_geocode((lat, long))
+    if result:
+        # Extract the formatted address from the first result
+        address = result[0]['formatted_address']
+        return address
+    else:
+        print("No results found.")
+        return None
+
+def get_lat_long(place_name):
+    # Geocode the place name
+    geocode_result = gmaps.geocode(place_name)
+
+    if not geocode_result:
+        return None
+
+    # Extract the latitude and longitude
+    location = geocode_result[0]['geometry']['location']
+    latitude = location['lat']
+    longitude = location['lng']
+
+    return latitude, longitude
+
+def find_nearest_places(locations, place_type='restaurant', radius=5000):
+    places = []
+    for location in locations:
+        # Search for places near each location
+        result = gmaps.places_nearby(location, radius=radius, type=place_type)
+        places.extend(result['results'])
+    
+    # Remove duplicates by place_id
+    unique_places = {place['place_id']: place for place in places}.values()
+    return unique_places
+
+def calculate_distances(locations, places):
+    distances = {}
+    
+    for place in places:
+        place_location = (place['geometry']['location']['lat'], place['geometry']['location']['lng'])
+        distances[place['place_id']] = sum(
+            gmaps.distance_matrix(origins=loc, destinations=[place_location], mode='driving')['rows'][0]['elements'][0]['distance']['value']
+            for loc in locations
+        )
+    
+    return distances
+
+def find_best_meeting_place(locations):
+    places = find_nearest_places(locations)
+    distances = calculate_distances(locations, places)
+    
+    # Find the place with the minimum total distance
+    best_place_id = min(distances, key=distances.get)
+    best_place = next(place for place in places if place['place_id'] == best_place_id)
+    
+    return best_place
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -15,7 +76,7 @@ class UserSerializer(serializers.ModelSerializer):
             email=validated_data['email'],
             password=validated_data['password'],
             phone=validated_data.get('phone', None),
-            location=validated_data.get('location', None),
+            location=get_place(validated_data.get('latitude', None),validated_data.get('longitude', None)),
             latitude=validated_data.get('latitude', None),
             longitude=validated_data.get('longitude', None)
         )
@@ -87,6 +148,8 @@ class CreateMeetingSerializer(serializers.Serializer):
         if len(value) > 4:
             raise serializers.ValidationError("A group can have a maximum of 4 members.")
         return value
+    
+    
 
     def create(self, validated_data):
         group = Group.objects.get(name=validated_data['name'])
@@ -104,9 +167,18 @@ class CreateMeetingSerializer(serializers.Serializer):
             raise serializers.ValidationError("One or more phone numbers are invalid or users not in group.")
 
         # Calculate the optimal location
-        avg_latitude = sum(user.latitude for user in users) / len(users)
-        avg_longitude = sum(user.longitude for user in users) / len(users)
+        # avg_latitude = sum(user.latitude for user in users) / len(users)
+        # avg_longitude = sum(user.longitude for user in users) / len(users)
+        latitudes = []
+        longitudes = []
+        for user in users:
+            latitudes.append(user.latitude)
+            longitudes.append(user.longitude)
+        locations = list(zip(latitudes, longitudes))
 
+        best_meeting_place = find_best_meeting_place(locations)
+        avg_latitude,avg_longitude = get_lat_long(best_meeting_place['name'])
+        print(avg_latitude,avg_longitude)
         meeting = Meeting.objects.create(
             group=group,
             name=name,

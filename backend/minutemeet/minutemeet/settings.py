@@ -9,13 +9,14 @@ https://docs.djangoproject.com/en/5.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
-
+from corsheaders.defaults import default_headers
 from pathlib import Path
 #AUTHMODEL
 AUTH_USER_MODEL = 'meeting.User'
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+APPEND_SLASH = False
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
@@ -40,9 +41,13 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'meeting',
     'rest_framework',
+    'rest_framework.authtoken',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.common.CommonMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -126,3 +131,46 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+ALLOWED_HOSTS = ['10.81.78.66',
+                 'ws://127.0.0.1:51961',
+                 '127.0.0.1:50527',
+                 '127.0.0.1',
+                 '10.0.2.2',
+                 'localhost']
+
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:3000',  # Add the URL of your Flutter app
+    'http://127.0.0.1:3000',
+    'ws://127.0.0.1:51961',
+    'ws://127.0.0.1:53928',
+    'http://10.81.78.66',
+    
+
+    # You can add more origins if necessary
+]
+
+CORS_ALLOW_ALL_ORIGINS = True
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'Authorization',
+]
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+}
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'DEBUG',
+    },
+}

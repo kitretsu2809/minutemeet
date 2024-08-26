@@ -32,13 +32,18 @@ dependencies:
     sdk: flutter
   flutter_bloc: ^8.0.1
   geolocator: ^13.0.1
-  google_maps_flutter: ^2.2.0
+  google_maps_flutter: ^2.5.0
+  dio: ^5.1.1
+  contacts_service: ^0.6.0
   http: 1.2.2
+  flutter_secure_storage: ^5.0.2  # For storing JWT token securely
 
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.6
+  shared_preferences: ^2.3.2
+  intl: ^0.19.0
 
 dev_dependencies:
   flutter_test:
