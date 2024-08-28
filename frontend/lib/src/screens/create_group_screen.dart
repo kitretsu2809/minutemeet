@@ -105,9 +105,20 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   Future<void> _createGroup() async {
     if (_formKey.currentState?.validate() ?? false) {
       final name = _nameController.text;
+
+      // Helper function to clean phone numbers
+      String cleanPhoneNumber(String phone) {
+        // Remove spaces and any leading +91 prefix
+        phone = phone.replaceAll(RegExp(r'\s+'), ''); // Remove spaces
+        return phone.startsWith('91')
+            ? phone.substring(2)
+            : phone; // Remove +91 if present
+      }
+
+      // Get cleaned phone numbers
       final userPhones = _selectedContacts
           .map((contact) => contact.phones!.isNotEmpty
-              ? contact.phones!.first.value ?? ''
+              ? cleanPhoneNumber(contact.phones!.first.value ?? '')
               : '')
           .where((phone) => phone.isNotEmpty)
           .toList();
@@ -119,19 +130,23 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         );
         return;
       }
+
       final token = await getToken(); // Retrieve the JWT token
       print(token);
+
       final response = await http.post(
-        Uri.parse('http://10.0.2.2:8000/create-group/'),
+        Uri.parse('http://10.81.78.66:8000/create-group/'),
         headers: <String, String>{
           'Content-Type': 'application/json; charset=UTF-8',
-          'Authorization': 'Bearer $token',
+          'Authorization':
+              'Bearer $token', // Adjust if using Token instead of Bearer
         },
         body: json.encode({
           'name': name,
           'user_phones': userPhones,
         }),
       );
+
       print(userPhones);
       if (response.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(

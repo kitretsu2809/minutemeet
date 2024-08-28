@@ -30,7 +30,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _getCurrentLocation() async {
     try {
       Position position = await Geolocator.getCurrentPosition(
-        // ignore: deprecated_member_use
         desiredAccuracy: LocationAccuracy.high,
       );
       setState(() {
@@ -52,7 +51,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final String password = _passwordController.text;
     final String email = _emailController.text;
     final String phone = _phoneController.text;
-    final String location = _locationController.text;
+
+    if (_latitude == null || _longitude == null) {
+      _showError("Location data is not available.");
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    // Format latitude and longitude to 6 decimal places
+    final formattedLatitude = _latitude!.toStringAsFixed(6);
+    final formattedLongitude = _longitude!.toStringAsFixed(6);
 
     try {
       final response = await http.post(
@@ -65,15 +75,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'password': password,
           'email': email,
           'phone': phone,
-          'location': location,
-          'latitude': _latitude,
-          'longitude': _longitude,
+          'latitude': formattedLatitude,
+          'longitude': formattedLongitude,
         }),
       );
 
       if (response.statusCode == 201) {
         // Handle successful registration
-        Navigator.pushReplacementNamed(context, '/login');
+        Navigator.pushReplacementNamed(context, '/');
       } else {
         _showError('Registration failed: ${response.body}');
       }
@@ -120,7 +129,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const SizedBox(height: 8.0),
             TextField(
               controller: _phoneController,
-              decoration: const InputDecoration(labelText: 'Phone'),
+              decoration:
+                  const InputDecoration(labelText: 'Phone (Without +91)'),
             ),
             const SizedBox(height: 20.0),
             _isLoading

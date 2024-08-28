@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'create_group_screen.dart';
 import 'view_meetings_screen.dart';
-import 'map_screen.dart'; // Import your MapScreen
+import 'map_screen.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -17,14 +17,13 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0; // Default index (MapScreen is initially visible)
+  int _selectedIndex = 0;
   Timer? _locationUpdateTimer;
 
-  // Add MapScreen to the list of widgets
   static final List<Widget> _widgetOptions = <Widget>[
     const MapScreen(
       meetingName: '',
-    ), // Show the map screen initially
+    ),
     const CreateGroupScreen(),
     const ViewMeetingsScreen(),
   ];
@@ -37,7 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _startLocationUpdates() {
     _locationUpdateTimer =
-        Timer.periodic(Duration(minutes: 5), (Timer timer) async {
+        Timer.periodic(Duration(seconds: 10), (Timer timer) async {
       try {
         Position position = await _getCurrentLocation();
         await _updateUserLocation(position);
@@ -68,27 +67,36 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _updateUserLocation(Position position) async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token');
 
-    if (token == null) {
-      throw Exception('No token found');
-    }
+      if (token == null || token.isEmpty) {
+        print('No token found or token is empty');
+        return;
+      }
 
-    final response = await http.post(
-      Uri.parse('http://10.81.78.66:8000/update_location/'),
-      headers: {
-        'Authorization': 'Token $token',
-        'Content-Type': 'application/json; charset=UTF-8',
-      },
-      body: jsonEncode(<String, dynamic>{
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-      }),
-    );
+      final response = await http.post(
+        Uri.parse('http://10.81.78.66:8000/update_location/'),
+        headers: {
+          'Authorization':
+              'Token $token', // Changed to Bearer if required by your API
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+        body: jsonEncode(<String, dynamic>{
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+        }),
+      );
 
-    if (response.statusCode != 200) {
-      throw Exception('Failed to update location: ${response.body}');
+      if (response.statusCode == 200) {
+        print('Location updated successfully.');
+      } else {
+        print(
+            'Failed to update location: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      print('Error during location update: $e');
     }
   }
 
@@ -100,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onItemTapped(int index) {
     setState(() {
-      _selectedIndex = index; // Update the selected index
+      _selectedIndex = index;
     });
   }
 

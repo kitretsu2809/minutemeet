@@ -1,3 +1,4 @@
+from django.forms import ValidationError
 from rest_framework import serializers
 from .models import User, Group, Meeting
 import googlemaps
@@ -87,8 +88,8 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
 class LocationUpdateSerializer(serializers.Serializer):
-    latitude = serializers.DecimalField(max_digits=9, decimal_places=6)
-    longitude = serializers.DecimalField(max_digits=9, decimal_places=6)
+    latitude = serializers.FloatField(required=True)
+    longitude = serializers.FloatField(required=True)
 
 class GroupSerializer(serializers.ModelSerializer):
     class Meta:
@@ -103,10 +104,22 @@ class CreateGroupSerializer(serializers.Serializer):
         min_length=1
     )
 
-    def validate_user_phones(self, value):
+        # Ensure at least one phone number belongs to the logged-in user
+        
+
+    def validate_user_phones(self, value, user_phones):
         if len(value) > 4:
             raise serializers.ValidationError("A group can have a maximum of 4 members.")
-        return value
+        user = self.context['request'].user
+        if not user:
+            raise ValidationError("User is not authenticated")
+
+        user_phone = user.phone  # Assuming the `phone` field stores the user's phone number
+
+        if user_phone not in user_phones:
+            raise ValidationError("At least one phone number must belong to the logged-in user")
+
+        return user_phones
 
     def validate(self, data):
         name = data['name']
@@ -118,6 +131,8 @@ class CreateGroupSerializer(serializers.Serializer):
         
         # Check if all phone numbers belong to existing users
         users = User.objects.filter(phone__in=user_phones)
+        print("Fuck")
+        print(users)
         if users.count() != len(user_phones):
             raise serializers.ValidationError("One or more phone numbers are invalid.")
         
@@ -141,7 +156,7 @@ class CreateMeetingSerializer(serializers.Serializer):
     user_phones = serializers.ListField(
         child=serializers.CharField(max_length=20),
         max_length=4,
-        min_length=1
+        min_length=2
     )
 
     def validate_user_phones(self, value):
@@ -160,6 +175,7 @@ class CreateMeetingSerializer(serializers.Serializer):
         print(name)
 
         users = User.objects.filter(phone__in=user_phones)
+        print("FuckYou")
         print(users)
         
         if users.count() != len(user_phones):
@@ -177,13 +193,14 @@ class CreateMeetingSerializer(serializers.Serializer):
         locations = list(zip(latitudes, longitudes))
 
         best_meeting_place = find_best_meeting_place(locations)
-        avg_latitude,avg_longitude = get_lat_long(best_meeting_place['name'])
-        print(avg_latitude,avg_longitude)
+        print(best_meeting_place)
+        lat = best_meeting_place['geometry']['location']['lat']
+        lng = best_meeting_place['geometry']['location']['lng']
         meeting = Meeting.objects.create(
             group=group,
             name=name,
-            finalized_latitude=avg_latitude,
-            finalized_longitude=avg_longitude
+            finalized_latitude=lat,
+            finalized_longitude=lng
         )
 
         return meeting

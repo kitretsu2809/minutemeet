@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http; // Import the http package
 
 class MapScreen extends StatefulWidget {
   final String meetingName;
@@ -38,9 +39,10 @@ class _MapScreenState extends State<MapScreen> {
           markerId: const MarkerId('finalized_location'),
           position: finalizedPosition,
           infoWindow: InfoWindow(
-              title: widget.meetingName.isEmpty
-                  ? "Meeting Location"
-                  : widget.meetingName),
+            title: widget.meetingName.isEmpty
+                ? "Meeting Location"
+                : widget.meetingName,
+          ),
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
         ),
       );
@@ -94,7 +96,6 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _getCurrentLocation() async {
     try {
       Position position = await Geolocator.getCurrentPosition(
-        // ignore: deprecated_member_use
         desiredAccuracy: LocationAccuracy.high,
       );
       if (mounted) {
@@ -123,6 +124,37 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  Future<void> _logout() async {
+    try {
+      final response = await http.post(
+        Uri.parse(
+            'http://10.81.78.66:8000/logout/'), // Using the correct http package
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        // Handle successful logout
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/');
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Logout failed: ${response.body}')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('An error occurred: $e')),
+        );
+      }
+    }
+  }
+
   @override
   void dispose() {
     _mapController.dispose();
@@ -132,7 +164,15 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("MinuteMeet")),
+      appBar: AppBar(
+        title: const Text("MinuteMeet"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: _logout,
+          ),
+        ],
+      ),
       body: GoogleMap(
         onMapCreated: _onMapCreated,
         initialCameraPosition: CameraPosition(
