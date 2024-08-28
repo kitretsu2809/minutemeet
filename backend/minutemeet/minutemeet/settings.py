@@ -13,10 +13,11 @@ from corsheaders.defaults import default_headers
 from pathlib import Path
 #AUTHMODEL
 AUTH_USER_MODEL = 'meeting.User'
+# AUTH_USER_MODEL = 'auth.User'
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-APPEND_SLASH = False
+APPEND_SLASH = False    
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/

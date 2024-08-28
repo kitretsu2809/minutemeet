@@ -4,6 +4,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:contacts_service/contacts_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:permission_handler/permission_handler.dart';
+// ignore: unused_import
+import 'login_screen.dart';
 
 Future<String?> getToken() async {
   final prefs = await SharedPreferences.getInstance();
@@ -30,75 +33,96 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   }
 
   Future<void> _getCurrentLocation() async {
+    // Ensure location permission is granted
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission != LocationPermission.whileInUse &&
+          permission != LocationPermission.always) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location permission is required.')),
+        );
+        return;
+      }
+    }
+
     try {
       Position position = await Geolocator.getCurrentPosition(
-          // ignore: deprecated_member_use
-          desiredAccuracy: LocationAccuracy.high);
+        desiredAccuracy: LocationAccuracy.best,
+      );
       setState(() {
         _currentLocation = '${position.latitude}, ${position.longitude}';
       });
     } catch (e) {
       print('Error getting location: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error getting current location.')),
+      );
     }
   }
 
   void _selectContacts() async {
-    final Iterable<Contact> contacts = await ContactsService.getContacts();
-    List<Contact> selectedContacts = List.from(_selectedContacts);
+    if (await Permission.contacts.request().isGranted) {
+      final Iterable<Contact> contacts = await ContactsService.getContacts();
+      List<Contact> selectedContacts = List.from(_selectedContacts);
 
-    final result = await showDialog<List<Contact>>(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Select Contacts'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: contacts.map((contact) {
-                    bool isSelected = selectedContacts.contains(contact);
-                    return CheckboxListTile(
-                      title: Text(contact.displayName ?? ''),
-                      value: isSelected,
-                      onChanged: (bool? selected) {
-                        setState(() {
-                          if (selected == true) {
-                            selectedContacts.add(contact);
-                          } else {
-                            selectedContacts.remove(contact);
-                          }
-                        });
-                      },
-                    );
-                  }).toList(),
+      final result = await showDialog<List<Contact>>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setState) {
+              return AlertDialog(
+                title: const Text('Select Contacts'),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: contacts.map((contact) {
+                      bool isSelected = selectedContacts.contains(contact);
+                      return CheckboxListTile(
+                        title: Text(contact.displayName ?? ''),
+                        value: isSelected,
+                        onChanged: (bool? selected) {
+                          setState(() {
+                            if (selected == true) {
+                              selectedContacts.add(contact);
+                            } else {
+                              selectedContacts.remove(contact);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
                 ),
-              ),
-              actions: <Widget>[
-                TextButton(
-                  child: const Text('CANCEL'),
-                  onPressed: () {
-                    Navigator.of(context).pop(_selectedContacts);
-                  },
-                ),
-                TextButton(
-                  child: const Text('OK'),
-                  onPressed: () {
-                    Navigator.of(context).pop(selectedContacts);
-                  },
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
+                actions: <Widget>[
+                  TextButton(
+                    child: const Text('CANCEL'),
+                    onPressed: () {
+                      Navigator.of(context).pop(_selectedContacts);
+                    },
+                  ),
+                  TextButton(
+                    child: const Text('OK'),
+                    onPressed: () {
+                      Navigator.of(context).pop(selectedContacts);
+                    },
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
 
-    if (result != null) {
-      setState(() {
-        _selectedContacts = result;
-      });
-      print(_selectedContacts);
+      if (result != null) {
+        setState(() {
+          _selectedContacts = result;
+        });
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Contacts permission is required.')),
+      );
     }
   }
 
@@ -106,16 +130,14 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     if (_formKey.currentState?.validate() ?? false) {
       final name = _nameController.text;
 
-      // Helper function to clean phone numbers
+      // Clean phone numbers
       String cleanPhoneNumber(String phone) {
-        // Remove spaces and any leading +91 prefix
         phone = phone.replaceAll(RegExp(r'\s+'), ''); // Remove spaces
-        return phone.startsWith('91')
-            ? phone.substring(2)
+        return phone.startsWith('+91')
+            ? phone.substring(3)
             : phone; // Remove +91 if present
       }
 
-      // Get cleaned phone numbers
       final userPhones = _selectedContacts
           .map((contact) => contact.phones!.isNotEmpty
               ? cleanPhoneNumber(contact.phones!.first.value ?? '')
@@ -131,9 +153,16 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         return;
       }
 
-      final token = await getToken(); // Retrieve the JWT token
-      print(token);
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token');
 
+      if (token == null) {
+        throw Exception('No token found');
+      }
+
+      print("Using token: $token"); // Debug print
+
+      // Proceed with the API call using the token
       final response = await http.post(
         Uri.parse('http://10.81.78.66:8000/create-group/'),
         headers: <String, String>{
@@ -147,7 +176,6 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         }),
       );
 
-      print(userPhones);
       if (response.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Group created successfully!')),

@@ -94,7 +94,7 @@ class LocationUpdateSerializer(serializers.Serializer):
 class GroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
-        fields = ['id', 'name', 'members']
+        fields = ['name', 'members']
 
 class CreateGroupSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=255)
@@ -107,19 +107,19 @@ class CreateGroupSerializer(serializers.Serializer):
         # Ensure at least one phone number belongs to the logged-in user
         
 
-    def validate_user_phones(self, value, user_phones):
-        if len(value) > 4:
-            raise serializers.ValidationError("A group can have a maximum of 4 members.")
-        user = self.context['request'].user
-        if not user:
-            raise ValidationError("User is not authenticated")
+    # def validate_user_phones(self,data):
+    #     if len(data) > 4:
+    #         raise serializers.ValidationError("A group can have a maximum of 4 members.")
+    #     user = self.context['request'].user
+    #     if not user:
+    #         raise ValidationError("User is not authenticated")
 
-        user_phone = user.phone  # Assuming the `phone` field stores the user's phone number
+    #     user_phone = user.phone  # Assuming the `phone` field stores the user's phone number
 
-        if user_phone not in user_phones:
-            raise ValidationError("At least one phone number must belong to the logged-in user")
+    #     if user_phone not in user_phones:
+    #         raise ValidationError("At least one phone number must belong to the logged-in user")
 
-        return user_phones
+    #     return user_phones
 
     def validate(self, data):
         name = data['name']

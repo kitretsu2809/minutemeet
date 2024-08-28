@@ -36,7 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _startLocationUpdates() {
     _locationUpdateTimer =
-        Timer.periodic(Duration(seconds: 10), (Timer timer) async {
+        Timer.periodic(Duration(seconds: 30), (Timer timer) async {
       try {
         Position position = await _getCurrentLocation();
         await _updateUserLocation(position);

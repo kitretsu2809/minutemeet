@@ -91,10 +91,10 @@ def update_location(request):
     # If the data is invalid, return a 400 Bad Request with error details
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-# @csrf_exempt
+@csrf_exempt
 # @api_view(['POST'])
 # @permission_classes([IsAuthenticated])
-@api_view(['POST'])
+@api_view(['POST','PUT','PATCH'])
 def create_group(request):
     print("Request Data:", request.data)  # Debugging print statement
     serializer = CreateGroupSerializer(data=request.data)
