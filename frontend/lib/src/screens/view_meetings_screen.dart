@@ -17,7 +17,7 @@ Future<List<Meeting>> fetchMeetings() async {
   print("Using token: $token"); // Debug print
 
   final response = await http.get(
-    Uri.parse('http://10.81.78.66:8000/user/meetings'),
+    Uri.parse('http://192.168.100.228:8000/user/meetings'),
     headers: {
       'Authorization': 'Token $token',
       'Content-Type': 'application/json; charset=UTF-8',

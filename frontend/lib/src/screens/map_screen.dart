@@ -128,7 +128,7 @@ class _MapScreenState extends State<MapScreen> {
     try {
       final response = await http.post(
         Uri.parse(
-            'http://10.81.78.66:8000/logout/'), // Using the correct http package
+            'http://192.168.100.228:8000/logout/'), // Using the correct http package
         headers: <String, String>{
           'Content-Type': 'application/json; charset=UTF-8',
         },

@@ -77,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       final response = await http.post(
-        Uri.parse('http://10.81.78.66:8000/update_location/'),
+        Uri.parse('http://192.168.100.228:8000/update_location/'),
         headers: {
           'Authorization':
               'Token $token', // Changed to Bearer if required by your API

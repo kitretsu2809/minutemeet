@@ -130,24 +130,7 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-ALLOWED_HOSTS = ['10.61.96.1',
-                 'ws://127.0.0.1:51961',
-                 '127.0.0.1:50527',
-                 '127.0.0.1',
-                 '10.0.2.2',
-                 'localhost',
-                 '10.61.124.126',
-                 '10.81.78.66']
-
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',  # Add the URL of your Flutter app
-    'http://127.0.0.1:3000',
-    'ws://127.0.0.1:51961',
-    'ws://127.0.0.1:53928',
-    'http://10.81.78.66',    
-
-    # You can add more origins if necessary
-]
+ALLOWED_HOSTS = ['*']
 
 CORS_ALLOW_ALL_ORIGINS = True
 

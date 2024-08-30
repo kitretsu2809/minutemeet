@@ -164,7 +164,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
       // Proceed with the API call using the token
       final response = await http.post(
-        Uri.parse('http://10.81.78.66:8000/create-group/'),
+        Uri.parse('http://192.168.100.228:8000/create-group/'),
         headers: <String, String>{
           'Content-Type': 'application/json; charset=UTF-8',
           'Authorization':
