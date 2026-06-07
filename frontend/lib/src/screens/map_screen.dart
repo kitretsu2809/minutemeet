@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http; // Import the http package
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../core/api_service.dart';
 
 class MapScreen extends StatefulWidget {
   final String meetingName;
@@ -20,18 +22,17 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  late GoogleMapController _mapController;
-  LatLng _currentPosition =
-      const LatLng(37.7749, -122.4194); // Default to San Francisco
+  GoogleMapController? _mapController;
+  LatLng _currentPosition = const LatLng(37.7749, -122.4194); // Default to SF
   final Set<Marker> _markers = {};
   bool _locationLoaded = false;
+  bool _isLoggingOut = false;
 
   @override
   void initState() {
     super.initState();
     _checkLocationPermission();
 
-    // If the finalized meeting location is provided, add a marker for it
     if (widget.latitude != null && widget.longitude != null) {
       LatLng finalizedPosition = LatLng(widget.latitude!, widget.longitude!);
       _markers.add(
@@ -39,15 +40,11 @@ class _MapScreenState extends State<MapScreen> {
           markerId: const MarkerId('finalized_location'),
           position: finalizedPosition,
           infoWindow: InfoWindow(
-            title: widget.meetingName.isEmpty
-                ? "Meeting Location"
-                : widget.meetingName,
+            title: widget.meetingName.isEmpty ? "Meeting Location" : widget.meetingName,
           ),
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
         ),
       );
-
-      // Set the initial position to the finalized location
       _currentPosition = finalizedPosition;
     }
   }
@@ -57,9 +54,7 @@ class _MapScreenState extends State<MapScreen> {
     if (!serviceEnabled) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content:
-                  Text("Location services are disabled. Please enable them.")),
+          const SnackBar(content: Text("Location services are disabled. Please enable them.")),
         );
       }
       return;
@@ -68,13 +63,10 @@ class _MapScreenState extends State<MapScreen> {
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission != LocationPermission.whileInUse &&
-          permission != LocationPermission.always) {
+      if (permission != LocationPermission.whileInUse && permission != LocationPermission.always) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text(
-                    "Location permissions are denied. Please grant permissions.")),
+            const SnackBar(content: Text("Location permissions are denied. Please grant permissions.")),
           );
         }
         return;
@@ -86,10 +78,8 @@ class _MapScreenState extends State<MapScreen> {
 
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
-    if (_locationLoaded ||
-        widget.latitude != null && widget.longitude != null) {
-      _mapController
-          .animateCamera(CameraUpdate.newLatLngZoom(_currentPosition, 12));
+    if (_locationLoaded || (widget.latitude != null && widget.longitude != null)) {
+      _mapController?.animateCamera(CameraUpdate.newLatLngZoom(_currentPosition, 12));
     }
   }
 
@@ -101,48 +91,42 @@ class _MapScreenState extends State<MapScreen> {
       if (mounted) {
         setState(() {
           _currentPosition = LatLng(position.latitude, position.longitude);
-          print(
-              'Current Location: ${_currentPosition.latitude}, ${_currentPosition.longitude}');
           _markers.add(Marker(
             markerId: const MarkerId('current_location'),
             position: _currentPosition,
-            infoWindow: const InfoWindow(title: 'Current Location'),
-            icon:
-                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+            infoWindow: const InfoWindow(title: 'You are here'),
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
           ));
           _locationLoaded = true;
-          _mapController
-              .animateCamera(CameraUpdate.newLatLngZoom(_currentPosition, 12));
+          _mapController?.animateCamera(CameraUpdate.newLatLngZoom(_currentPosition, 14));
         });
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Failed to get current location: $e")),
-        );
-      }
+      debugPrint("Failed to get current location: $e");
     }
   }
 
   Future<void> _logout() async {
+    setState(() {
+      _isLoggingOut = true;
+    });
+
     try {
-      final response = await http.post(
-        Uri.parse(
-            'http://192.168.100.228:8000/logout/'), // Using the correct http package
-        headers: <String, String>{
-          'Content-Type': 'application/json; charset=UTF-8',
-        },
-      );
+      final response = await ApiService.post('/logout/', {}, requireAuth: true);
 
       if (response.statusCode == 200) {
-        // Handle successful logout
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('access_token');
+        const storage = FlutterSecureStorage();
+        await storage.delete(key: 'jwt_token');
+
         if (mounted) {
-          Navigator.pushReplacementNamed(context, '/');
+          Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
         }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Logout failed: ${response.body}')),
+            SnackBar(content: Text('Logout failed: ${response.statusCode}')),
           );
         }
       }
@@ -152,12 +136,18 @@ class _MapScreenState extends State<MapScreen> {
           SnackBar(content: Text('An error occurred: $e')),
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoggingOut = false;
+        });
+      }
     }
   }
 
   @override
   void dispose() {
-    _mapController.dispose();
+    _mapController?.dispose();
     super.dispose();
   }
 
@@ -165,23 +155,47 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("MinuteMeet"),
+        title: Text(widget.meetingName.isEmpty ? "MinuteMeet Map" : widget.meetingName, style: const TextStyle(fontWeight: FontWeight.bold)),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _logout,
-          ),
+          _isLoggingOut
+              ? const Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))))
+              : IconButton(
+                  icon: const Icon(Icons.logout),
+                  onPressed: _logout,
+                  tooltip: 'Logout',
+                ),
         ],
       ),
-      body: GoogleMap(
-        onMapCreated: _onMapCreated,
-        initialCameraPosition: CameraPosition(
-          target: _currentPosition,
-          zoom: 10,
+      body: SafeArea(
+        child: ClipRRect(
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+          child: GoogleMap(
+            onMapCreated: _onMapCreated,
+            initialCameraPosition: CameraPosition(
+              target: _currentPosition,
+              zoom: 10,
+            ),
+            myLocationEnabled: true,
+            myLocationButtonEnabled: true,
+            markers: _markers,
+            mapToolbarEnabled: false,
+            zoomControlsEnabled: false,
+          ),
         ),
-        myLocationEnabled: true,
-        myLocationButtonEnabled: true,
-        markers: _markers,
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        child: const Icon(Icons.my_location, color: Colors.white),
+        onPressed: () {
+          if (_locationLoaded) {
+             _mapController?.animateCamera(CameraUpdate.newLatLngZoom(_currentPosition, 14));
+          } else {
+             _getCurrentLocation();
+          }
+        },
       ),
     );
   }
