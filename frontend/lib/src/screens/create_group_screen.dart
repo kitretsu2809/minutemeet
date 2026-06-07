@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:contacts_service/contacts_service.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../core/api_service.dart';
 
@@ -40,7 +40,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
   void _selectContacts() async {
     if (await Permission.contacts.request().isGranted) {
-      final Iterable<Contact> contacts = await ContactsService.getContacts();
+      final List<Contact> contacts = await FlutterContacts.getContacts(withProperties: true);
       List<Contact> selectedContacts = List.from(_selectedContacts);
 
       if (!mounted) return;
@@ -59,7 +59,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                       bool isSelected = selectedContacts.contains(contact);
                       return CheckboxListTile(
                         title: Text(contact.displayName ?? 'Unknown'),
-                        subtitle: Text(contact.phones?.isNotEmpty == true ? contact.phones!.first.value ?? '' : 'No phone number'),
+                        subtitle: Text(contact.phones.isNotEmpty == true ? contact.phones.first.number : 'No phone number'),
                         value: isSelected,
                         onChanged: (bool? selected) {
                           setState(() {
@@ -130,8 +130,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
       }
 
       final userPhones = _selectedContacts
-          .map((contact) => contact.phones!.isNotEmpty
-              ? cleanPhoneNumber(contact.phones!.first.value ?? '')
+          .map((contact) => contact.phones.isNotEmpty
+              ? cleanPhoneNumber(contact.phones.first.number)
               : '')
           .where((phone) => phone.isNotEmpty)
           .toList();
