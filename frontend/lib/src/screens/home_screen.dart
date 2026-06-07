@@ -4,10 +4,7 @@ import 'create_group_screen.dart';
 import 'view_meetings_screen.dart';
 import 'map_screen.dart';
 import 'package:geolocator/geolocator.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/api_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -35,13 +32,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _startLocationUpdates() {
-    _locationUpdateTimer =
-        Timer.periodic(Duration(seconds: 30), (Timer timer) async {
+    _locationUpdateTimer = Timer.periodic(const Duration(seconds: 30), (Timer timer) async {
       try {
         Position position = await _getCurrentLocation();
         await _updateUserLocation(position);
       } catch (e) {
-        print('Error updating location: $e');
+        debugPrint('Error updating location: $e');
       }
     });
   }
@@ -68,35 +64,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _updateUserLocation(Position position) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('access_token');
-
-      if (token == null || token.isEmpty) {
-        print('No token found or token is empty');
-        return;
-      }
-
-      final response = await http.post(
-        Uri.parse('http://192.168.100.228:8000/update_location/'),
-        headers: {
-          'Authorization':
-              'Token $token', // Changed to Bearer if required by your API
-          'Content-Type': 'application/json; charset=UTF-8',
-        },
-        body: jsonEncode(<String, dynamic>{
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-        }),
-      );
+      final response = await ApiService.post('/update_location/', {
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+      }, requireAuth: true);
 
       if (response.statusCode == 200) {
-        print('Location updated successfully.');
+        debugPrint('Location updated successfully.');
       } else {
-        print(
-            'Failed to update location: ${response.statusCode} - ${response.body}');
+        debugPrint('Failed to update location: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
-      print('Error during location update: $e');
+      debugPrint('Error during location update: $e');
     }
   }
 
@@ -118,23 +97,43 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Center(
         child: _widgetOptions.elementAt(_selectedIndex),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(Icons.map),
-            label: 'Map',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.group_add),
-            label: 'Create Group',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.meeting_room),
-            label: 'Meetings',
-          ),
-        ],
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          items: const <BottomNavigationBarItem>[
+            BottomNavigationBarItem(
+              icon: Icon(Icons.map_outlined),
+              activeIcon: Icon(Icons.map),
+              label: 'Map',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.group_add_outlined),
+              activeIcon: Icon(Icons.group_add),
+              label: 'Create Group',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.meeting_room_outlined),
+              activeIcon: Icon(Icons.meeting_room),
+              label: 'Meetings',
+            ),
+          ],
+          currentIndex: _selectedIndex,
+          selectedItemColor: Theme.of(context).colorScheme.primary,
+          unselectedItemColor: const Color(0xFF64748B),
+          showUnselectedLabels: true,
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.white,
+          elevation: 0,
+          onTap: _onItemTapped,
+        ),
       ),
     );
   }
