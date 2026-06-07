@@ -40,7 +40,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
   void _selectContacts() async {
     if (await Permission.contacts.request().isGranted) {
-      final List<Contact> contacts = await FlutterContacts.getContacts(withProperties: true);
+      final List<Contact> contacts = await FlutterContacts.getAll(properties: {ContactProperty.phone});
       List<Contact> selectedContacts = List.from(_selectedContacts);
 
       if (!mounted) return;
