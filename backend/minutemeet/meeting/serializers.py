@@ -4,8 +4,10 @@ from .models import User, Group, Meeting
 import googlemaps
 from itertools import combinations
 
+from django.conf import settings
+
 # Initialize Google Maps client
-gmaps = googlemaps.Client(key='AIzaSyC9OK4cKIweM7ph1Tnm3yWpfWGibDFstcg')
+gmaps = googlemaps.Client(key=settings.GOOGLE_MAPS_API_KEY)
 def get_place(lat,long):
     result = gmaps.reverse_geocode((lat, long))
     if result:
@@ -39,7 +41,7 @@ def find_nearest_places(locations, place_type='restaurant', radius=5000):
     
     # Remove duplicates by place_id
     unique_places = {place['place_id']: place for place in places}.values()
-    return unique_places
+    return list(unique_places)
 
 def calculate_distances(locations, places):
     distances = {}
@@ -54,7 +56,11 @@ def calculate_distances(locations, places):
     return distances
 
 def find_best_meeting_place(locations):
+    if not locations:
+        return None
     places = find_nearest_places(locations)
+    if not places:
+        return None
     distances = calculate_distances(locations, places)
     
     # Find the place with the minimum total distance
@@ -77,7 +83,7 @@ class UserSerializer(serializers.ModelSerializer):
             email=validated_data['email'],
             password=validated_data['password'],
             phone=validated_data.get('phone', None),
-            location=get_place(validated_data.get('latitude', None),validated_data.get('longitude', None)),
+            location=get_place(validated_data.get('latitude', None),validated_data.get('longitude', None)) if validated_data.get('latitude') and validated_data.get('longitude') else None,
             latitude=validated_data.get('latitude', None),
             longitude=validated_data.get('longitude', None)
         )
@@ -104,36 +110,13 @@ class CreateGroupSerializer(serializers.Serializer):
         min_length=1
     )
 
-        # Ensure at least one phone number belongs to the logged-in user
-        
-
-    # def validate_user_phones(self,data):
-    #     if len(data) > 4:
-    #         raise serializers.ValidationError("A group can have a maximum of 4 members.")
-    #     user = self.context['request'].user
-    #     if not user:
-    #         raise ValidationError("User is not authenticated")
-
-    #     user_phone = user.phone  # Assuming the `phone` field stores the user's phone number
-
-    #     if user_phone not in user_phones:
-    #         raise ValidationError("At least one phone number must belong to the logged-in user")
-
-    #     return user_phones
-
     def validate(self, data):
         name = data['name']
         user_phones = data['user_phones']
         
-        # Check for duplicate group names
-        if Group.objects.filter(name=name).exists():
-            raise serializers.ValidationError("A group with this name already exists.")
-        
         # Check if all phone numbers belong to existing users
         users = User.objects.filter(phone__in=user_phones)
-        print("Fuck")
-        print(users)
-        if users.count() != len(user_phones):
+        if users.count() != len(set(user_phones)):
             raise serializers.ValidationError("One or more phone numbers are invalid.")
         
         return data
@@ -147,55 +130,54 @@ class CreateGroupSerializer(serializers.Serializer):
         
         # Add users to the group
         users = User.objects.filter(phone__in=user_phones)
-        group.members.set(users)
+        
+        # Include request user if they are missing
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            # We convert to a list to add the current user if not already in the group
+            user_list = list(users)
+            if request.user not in user_list:
+                user_list.append(request.user)
+            group.members.set(user_list)
+        else:
+            group.members.set(users)
+            
         group.save()
         
         return group
+
 class CreateMeetingSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=255)
-    user_phones = serializers.ListField(
-        child=serializers.CharField(max_length=20),
-        max_length=4,
-        min_length=2
-    )
+    group_id = serializers.IntegerField()
 
-    def validate_user_phones(self, value):
-        if len(value) > 4:
-            raise serializers.ValidationError("A group can have a maximum of 4 members.")
+    def validate_group_id(self, value):
+        if not Group.objects.filter(id=value).exists():
+            raise serializers.ValidationError("Invalid group ID.")
         return value
-    
-    
 
     def create(self, validated_data):
-        group = Group.objects.get(name=validated_data['name'])
-        print(group)
+        group = Group.objects.get(id=validated_data['group_id'])
         name = validated_data['name']
-        user_phones = validated_data['user_phones']
-        print(user_phones)
-        print(name)
 
-        users = User.objects.filter(phone__in=user_phones)
-        print("FuckYou")
-        print(users)
+        users = group.members.all()
         
-        if users.count() != len(user_phones):
-            print(users.count(), len(user_phones))
-            raise serializers.ValidationError("One or more phone numbers are invalid or users not in group.")
-
-        # Calculate the optimal location
-        # avg_latitude = sum(user.latitude for user in users) / len(users)
-        # avg_longitude = sum(user.longitude for user in users) / len(users)
         latitudes = []
         longitudes = []
         for user in users:
-            latitudes.append(user.latitude)
-            longitudes.append(user.longitude)
+            if user.latitude and user.longitude:
+                latitudes.append(user.latitude)
+                longitudes.append(user.longitude)
+        
         locations = list(zip(latitudes, longitudes))
 
-        best_meeting_place = find_best_meeting_place(locations)
-        print(best_meeting_place)
-        lat = best_meeting_place['geometry']['location']['lat']
-        lng = best_meeting_place['geometry']['location']['lng']
+        lat = None
+        lng = None
+        if locations:
+            best_meeting_place = find_best_meeting_place(locations)
+            if best_meeting_place:
+                lat = best_meeting_place['geometry']['location']['lat']
+                lng = best_meeting_place['geometry']['location']['lng']
+        
         meeting = Meeting.objects.create(
             group=group,
             name=name,
