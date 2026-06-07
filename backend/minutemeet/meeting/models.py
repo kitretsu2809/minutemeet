@@ -12,21 +12,8 @@ class User(AbstractUser):
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
 
-    groups = models.ManyToManyField(
-        'Group',  # Reference to the Group model
-        related_name='users',  # Updated related_name to avoid conflict
-        blank=True,
-        help_text='The groups this user belongs to.',
-        verbose_name='groups'
-    )
-
-    user_permissions = models.ManyToManyField(
-        'auth.Permission',
-        related_name='custom_user_permission_set',
-        blank=True,
-        help_text='Specific permissions for this user.',
-        verbose_name='user permissions'
-    )
+    # We use AbstractUser's built-in groups and user_permissions for auth.
+    # The custom relation to our Group model is handled by the 'members' field in Group.
 
     def __str__(self):
         return self.username

@@ -25,6 +25,10 @@ APPEND_SLASH = False
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-)5(pz*ncrg&cki5oy_!p-#a@cyomj@%bz+%l5!to+@u6-crkru'
 
+# Google Maps API Key
+import os
+GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', 'AIzaSyC9OK4cKIweM7ph1Tnm3yWpfWGibDFstcg')
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
