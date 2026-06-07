@@ -44,10 +44,14 @@ def login_view(request):
         return Response({"error": "Invalid username or password"}, status=status.HTTP_400_BAD_REQUEST)
     
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def logout_view(request):
-    # Log out the user
+    # Delete the auth token to log the user out securely
+    try:
+        request.user.auth_token.delete()
+    except Exception:
+        pass
     logout(request)
-    # Return a response indicating the user has been logged out
     return Response({"message": "Logged out successfully"}, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
@@ -76,8 +80,6 @@ def update_location(request):
         # Extract latitude and longitude from validated data
         latitude = request.data.get('latitude')
         longitude = request.data.get('longitude')
-        # latitude = serializer.validated_data['latitude']
-        # longitude = serializer.validated_data['longitude']
         
         # Update the authenticated user's location
         user = request.user
@@ -92,23 +94,20 @@ def update_location(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
-# @api_view(['POST'])
-# @permission_classes([IsAuthenticated])
 @api_view(['POST','PUT','PATCH'])
+@permission_classes([IsAuthenticated])
 def create_group(request):
-    print("Request Data:", request.data)  # Debugging print statement
-    serializer = CreateGroupSerializer(data=request.data)
+    # Pass the request context so the serializer can add the logged-in user
+    serializer = CreateGroupSerializer(data=request.data, context={'request': request})
     
     if serializer.is_valid():
         group = serializer.save()
         
         # Prepare meeting data
         meeting_data = {
-            "name": request.data.get('name'),  # Ensure 'name' is present in request data
-            "user_phones": request.data.get('user_phones', [])  # Ensure 'user_phones' is present in request data
+            "name": request.data.get('name'),
+            "group_id": group.id
         }
-        
-        print("Meeting Data:", meeting_data)  # Debugging print statement
         
         meeting_serializer = CreateMeetingSerializer(data=meeting_data)
         if meeting_serializer.is_valid():
@@ -125,6 +124,8 @@ def create_group(request):
             }, status=status.HTTP_201_CREATED)
         
         # Return meeting errors if meeting creation fails
+        # It's better to delete the group if meeting fails, to maintain consistency
+        group.delete()
         return Response({
             "meeting_errors": meeting_serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
