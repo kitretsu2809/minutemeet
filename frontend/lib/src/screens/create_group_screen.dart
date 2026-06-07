@@ -1,17 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:contacts_service/contacts_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
-// ignore: unused_import
-import 'login_screen.dart';
-
-Future<String?> getToken() async {
-  final prefs = await SharedPreferences.getInstance();
-  return prefs.getString('jwt_token');
-}
+import '../../core/api_service.dart';
 
 class CreateGroupScreen extends StatefulWidget {
   const CreateGroupScreen({super.key});
@@ -24,40 +15,26 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   List<Contact> _selectedContacts = [];
-  String _currentLocation = '';
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _getCurrentLocation();
+    _checkLocationPermission();
   }
 
-  Future<void> _getCurrentLocation() async {
-    // Ensure location permission is granted
+  Future<void> _checkLocationPermission() async {
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission != LocationPermission.whileInUse &&
           permission != LocationPermission.always) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location permission is required.')),
-        );
-        return;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permission is required to create meetings.')),
+          );
+        }
       }
-    }
-
-    try {
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.best,
-      );
-      setState(() {
-        _currentLocation = '${position.latitude}, ${position.longitude}';
-      });
-    } catch (e) {
-      print('Error getting location: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error getting current location.')),
-      );
     }
   }
 
@@ -66,25 +43,34 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
       final Iterable<Contact> contacts = await ContactsService.getContacts();
       List<Contact> selectedContacts = List.from(_selectedContacts);
 
+      if (!mounted) return;
       final result = await showDialog<List<Contact>>(
         context: context,
         builder: (context) {
           return StatefulBuilder(
             builder: (context, setState) {
               return AlertDialog(
-                title: const Text('Select Contacts'),
-                content: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                title: const Text('Select up to 4 Contacts'),
+                content: SizedBox(
+                  width: double.maxFinite,
+                  child: ListView(
+                    shrinkWrap: true,
                     children: contacts.map((contact) {
                       bool isSelected = selectedContacts.contains(contact);
                       return CheckboxListTile(
-                        title: Text(contact.displayName ?? ''),
+                        title: Text(contact.displayName ?? 'Unknown'),
+                        subtitle: Text(contact.phones?.isNotEmpty == true ? contact.phones!.first.value ?? '' : 'No phone number'),
                         value: isSelected,
                         onChanged: (bool? selected) {
                           setState(() {
                             if (selected == true) {
-                              selectedContacts.add(contact);
+                              if (selectedContacts.length < 4) {
+                                selectedContacts.add(contact);
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('You can only select up to 4 contacts.')),
+                                );
+                              }
                             } else {
                               selectedContacts.remove(contact);
                             }
@@ -120,22 +106,27 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         });
       }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Contacts permission is required.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Contacts permission is required.')),
+        );
+      }
     }
   }
 
   Future<void> _createGroup() async {
     if (_formKey.currentState?.validate() ?? false) {
-      final name = _nameController.text;
+      final name = _nameController.text.trim();
 
-      // Clean phone numbers
       String cleanPhoneNumber(String phone) {
-        phone = phone.replaceAll(RegExp(r'\s+'), ''); // Remove spaces
-        return phone.startsWith('+91')
-            ? phone.substring(3)
-            : phone; // Remove +91 if present
+        phone = phone.replaceAll(RegExp(r'\s+'), '');
+        phone = phone.replaceAll(RegExp(r'\D'), ''); // Remove all non-digits
+        // Optional: Remove country code if you enforce strict local numbers, 
+        // but it's better to keep backend matching flexible. Let's assume backend takes 10 digits or full.
+        if (phone.length > 10 && phone.startsWith('91')) {
+           phone = phone.substring(2);
+        }
+        return phone;
       }
 
       final userPhones = _selectedContacts
@@ -145,45 +136,49 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
           .where((phone) => phone.isNotEmpty)
           .toList();
 
-      if (userPhones.length < 2 || userPhones.length > 4) {
+      if (userPhones.isEmpty || userPhones.length > 4) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Please select between 2 to 4 phone numbers.')),
+          const SnackBar(content: Text('Please select between 1 to 4 valid contacts with phone numbers.')),
         );
         return;
       }
 
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('access_token');
+      setState(() {
+        _isLoading = true;
+      });
 
-      if (token == null) {
-        throw Exception('No token found');
-      }
-
-      print("Using token: $token"); // Debug print
-
-      // Proceed with the API call using the token
-      final response = await http.post(
-        Uri.parse('http://192.168.100.228:8000/create-group/'),
-        headers: <String, String>{
-          'Content-Type': 'application/json; charset=UTF-8',
-          'Authorization':
-              'Bearer $token', // Adjust if using Token instead of Bearer
-        },
-        body: json.encode({
+      try {
+        final response = await ApiService.post('/create-group/', {
           'name': name,
           'user_phones': userPhones,
-        }),
-      );
+        }, requireAuth: true);
 
-      if (response.statusCode == 201) {
+        if (response.statusCode == 201) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Group & Meeting created successfully!'), backgroundColor: Colors.green),
+          );
+          setState(() {
+            _nameController.clear();
+            _selectedContacts.clear();
+          });
+        } else {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to create group: ${response.body}')),
+          );
+        }
+      } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Group created successfully!')),
+          SnackBar(content: Text('An error occurred: $e')),
         );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to create group.')),
-        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
     }
   }
@@ -192,39 +187,86 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Create Group")),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
           child: Form(
             key: _formKey,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
+                const Icon(
+                  Icons.group_add,
+                  size: 64,
+                  color: Color(0xFF2563EB),
+                ),
+                const SizedBox(height: 24.0),
+                const Text(
+                  'Start a Meeting',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+                const SizedBox(height: 32.0),
                 TextFormField(
                   controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'Group Name'),
+                  decoration: const InputDecoration(
+                    labelText: 'Meeting/Group Name',
+                    prefixIcon: Icon(Icons.title),
+                  ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
+                    if (value == null || value.trim().isEmpty) {
                       return 'Please enter a group name';
                     }
                     return null;
                   },
                 ),
-                const SizedBox(height: 16.0),
-                ElevatedButton(
+                const SizedBox(height: 24.0),
+                ElevatedButton.icon(
                   onPressed: _selectContacts,
-                  child: const Text('Select Contacts'),
+                  icon: const Icon(Icons.contacts_outlined),
+                  label: const Text('Select Friends from Contacts'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF2563EB),
+                    side: const BorderSide(color: Color(0xFF2563EB)),
+                  ),
                 ),
                 const SizedBox(height: 16.0),
-                Text(
-                  'Selected Contacts: ${_selectedContacts.length}',
-                  style: const TextStyle(fontSize: 16.0),
-                ),
-                const SizedBox(height: 16.0),
-                ElevatedButton(
-                  onPressed: _createGroup,
-                  child: const Text('Create Group'),
-                ),
+                if (_selectedContacts.isNotEmpty) ...[
+                  const Text(
+                    'Selected Contacts:',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 8.0),
+                  Wrap(
+                    spacing: 8.0,
+                    children: _selectedContacts.map((contact) {
+                      return Chip(
+                        label: Text(contact.displayName ?? 'Unknown'),
+                        onDeleted: () {
+                          setState(() {
+                            _selectedContacts.remove(contact);
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 24.0),
+                ],
+                _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : ElevatedButton(
+                        onPressed: _createGroup,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Create Meeting Group', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ),
               ],
             ),
           ),
