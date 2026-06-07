@@ -22,15 +22,21 @@ APPEND_SLASH = False
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()  # Take environment variables from .env.
+
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-)5(pz*ncrg&cki5oy_!p-#a@cyomj@%bz+%l5!to+@u6-crkru'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-)5(pz*ncrg&cki5oy_!p-#a@cyomj@%bz+%l5!to+@u6-crkru')
 
 # Google Maps API Key
-import os
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', 'AIzaSyC9OK4cKIweM7ph1Tnm3yWpfWGibDFstcg')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost,10.0.2.2').split(',')
 
 
 # Application definition
